@@ -6,6 +6,9 @@
 <style>
 *{box-sizing:border-box}body{margin:0;background:#f8f5ef;color:#25201c;font:16px system-ui,sans-serif}main{max-width:1040px;margin:auto;padding:clamp(24px,6vw,70px) 22px}h1{font-size:clamp(2rem,5vw,3.4rem);line-height:1;margin:0 0 28px;letter-spacing:-.045em}h2{font-size:1.15rem;margin:0 0 16px}.layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;align-items:start}.panel{background:#fff;border:1px solid #e5dbd0;border-radius:18px;padding:clamp(16px,3vw,28px)}.fields{display:grid;gap:12px}label{display:grid;gap:5px;font-size:.87rem;font-weight:650}input:not([type=checkbox]){width:100%;font:inherit;padding:9px 11px;border:1px solid #ac9b8c;border-radius:8px;background:#fff;color:inherit}input[type=checkbox]{accent-color:#8c381d}.check{display:flex;align-items:center;gap:8px}details{border-top:1px solid #e5dbd0;padding-top:13px}summary{cursor:pointer;font-weight:650}details .fields{margin-top:12px}.preview{overflow-wrap:anywhere;border:1px solid #e5dbd0;border-radius:10px;padding:12px;margin-bottom:16px;background:#fff}button{background:#8c381d;border:0;border-radius:9px;color:#fff;font:inherit;font-weight:650;padding:10px 15px;cursor:pointer}p{font-size:.88rem;line-height:1.5;color:#605249}#status{min-height:1.5em;margin-bottom:0}@media(max-width:720px){.layout{grid-template-columns:1fr}}
 </style>
+<style>
+.roles{min-width:0;margin:0;padding:0;border:0}.roles legend{font-size:.87rem;font-weight:650;margin-bottom:5px}.role-row{display:flex;gap:8px}.role-row input{min-width:0}.role-actions{display:flex;flex-wrap:wrap;align-items:end;gap:8px 16px}.roles button{background:#f8f5ef;color:#70301c;border:1px solid #ac9b8c;padding:6px 10px;font-size:.87rem}.roles select{font:inherit;color:inherit;background:white;border:1px solid #ac9b8c;border-radius:8px;padding:6px 8px}
+</style>
 <main>
 <h1>Tu firma de Gmail</h1>
 <div class="layout">
@@ -13,7 +16,19 @@
 <h2 id="edit-title">Editar firma</h2>
 <form class="fields" id="editor">
 <label>Nombre<input name="name" placeholder="Tu nombre" maxlength="100"></label>
-<label>Cargo<input name="role" placeholder="Diseñador visual" maxlength="120"></label>
+<fieldset class="roles">
+<legend>Roles</legend>
+<div class="fields">
+<div id="role-list" class="fields"></div>
+<div class="role-actions">
+<button id="add-role" type="button">Agregar rol</button>
+<label>Separador<select name="roleSeparator">
+<option value="dot">Punto medio (·)</option>
+<option value="bar">Barra vertical (|)</option>
+</select></label>
+</div>
+</div>
+</fieldset>
 <label>Empresa<input name="company" maxlength="120"></label>
 <label>Ubicación<input name="location" maxlength="120"></label>
 <label>Teléfono<input name="phone" type="tel" maxlength="50"></label>
@@ -54,7 +69,9 @@ const publicImage = value => {
 };
 const webLink = value => value ? publicImage(value.includes('://') ? value : 'https://' + value) : '';
 const avatar = new URL('avatar-marco.gif', location.href);
-const settings = ['name','role','company','location','phone','email','website','image','linkedin','showAvatar','icons'];
+const settings = ['name','roleSeparator','company','location','phone','email','website','image','linkedin','showAvatar','icons'];
+const roleList = document.querySelector('#role-list');
+const roleValues = () => Array.from(roleList.querySelectorAll('input'), input => input.value.trim()).filter(Boolean);
 let objectUrl = '';
 let currentImage = '';
 let signatureText = '';
@@ -84,7 +101,8 @@ function render() {
   const info = row.insertCell();
   info.style.cssText = 'padding:0;vertical-align:middle';
   const name = read('name') || 'Tu nombre';
-  const lines = ['role','company','location','phone'].map(read).filter(Boolean);
+  const separator = read('roleSeparator') === 'bar' ? ' | ' : ' · ';
+  const lines = [roleValues().join(separator), ...['company','location','phone'].map(read)].filter(Boolean);
   info.append(element('div','font-size:21px;font-weight:bold;margin:0 0 3px',name));
   for (const line of lines) info.append(element('div','',line));
   const links = element('div','margin-top:6px');
@@ -110,13 +128,64 @@ function render() {
   preview.replaceChildren(table);
 }
 
+function addRole(value = '') {
+  const row = element('div','');
+  row.className = 'role-row';
+  const input = element('input','');
+  input.placeholder = 'Diseñador visual';
+  input.maxLength = 120;
+  input.value = value;
+  const remove = element('button','','Quitar');
+  remove.type = 'button';
+  remove.addEventListener('click',() => {
+    const next = row.nextElementSibling || row.previousElementSibling;
+    row.remove();
+    (next ? next.querySelector('input') : addRole()).focus();
+    updateSignature();
+  });
+  row.append(input,remove);
+  roleList.append(row);
+  return input;
+}
+
+function labelRoles() {
+  Array.from(roleList.children).forEach((row,index) => {
+    row.firstElementChild.setAttribute('aria-label','Rol ' + (index + 1));
+    row.lastElementChild.setAttribute('aria-label','Quitar rol ' + (index + 1));
+  });
+}
+
 try {
   const saved = JSON.parse(localStorage.getItem('gmail-signature') || '{}');
   for (const key of settings) {
     if (typeof saved[key] === 'boolean' && field(key).type === 'checkbox') field(key).checked = saved[key];
     if (typeof saved[key] === 'string' && field(key).type !== 'checkbox') field(key).value = saved[key];
   }
+  const legacy = typeof saved.role === 'string' ? saved.role : '';
+  if (!saved.roleSeparator && legacy.includes(' | ')) field('roleSeparator').value = 'bar';
+  const roles = Array.isArray(saved.roles) ? saved.roles : legacy.split(/\s+[·|]\s+/);
+  roles.filter(value => typeof value === 'string' && value.trim()).forEach(addRole);
 } catch {}
+if (!roleList.children.length) addRole();
+labelRoles();
+
+document.querySelector('#add-role').addEventListener('click',() => {
+  addRole().focus();
+  labelRoles();
+});
+
+function updateSignature() {
+  labelRoles();
+  try {
+    const saved = Object.fromEntries(settings.map(key => [
+      key, field(key).type === 'checkbox' ? field(key).checked : read(key)
+    ]));
+    saved.roles = roleValues();
+    localStorage.setItem('gmail-signature',JSON.stringify(saved));
+  } catch {}
+  status.textContent = '';
+  render();
+}
 
 form.addEventListener('submit',event => event.preventDefault());
 form.addEventListener('input',event => {
@@ -126,13 +195,7 @@ form.addEventListener('input',event => {
     objectUrl = '';
     field('file').value = '';
   }
-  try {
-    localStorage.setItem('gmail-signature',JSON.stringify(Object.fromEntries(settings.map(key => [
-      key, field(key).type === 'checkbox' ? field(key).checked : read(key)
-    ]))));
-  } catch {}
-  status.textContent = '';
-  render();
+  updateSignature();
 });
 field('file').addEventListener('change',event => {
   if (objectUrl) URL.revokeObjectURL(objectUrl);
