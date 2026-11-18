@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="es">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Generador de firmas para Gmail</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f8f5ef;color:#25201c;font:16px system-ui,sans-serif}main{max-width:1040px;margin:auto;padding:clamp(24px,6vw,70px) 22px}h1{font-size:clamp(2rem,5vw,3.4rem);line-height:1;margin:0 0 28px;letter-spacing:-.045em}h2{font-size:1.15rem;margin:0 0 16px}.layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;align-items:start}.panel{background:#fff;border:1px solid #e5dbd0;border-radius:18px;padding:clamp(16px,3vw,28px)}.fields{display:grid;gap:12px}label{display:grid;gap:5px;font-size:.87rem;font-weight:650}input:not([type=checkbox]){width:100%;font:inherit;padding:9px 11px;border:1px solid #ac9b8c;border-radius:8px;background:#fff;color:inherit}input[type=checkbox]{accent-color:#8c381d}.check{display:flex;align-items:center;gap:8px}details{border-top:1px solid #e5dbd0;padding-top:13px}summary{cursor:pointer;font-weight:650}details .fields{margin-top:12px}.preview{overflow-wrap:anywhere;border:1px solid #e5dbd0;border-radius:10px;padding:12px;margin-bottom:16px;background:#fff}button{background:#8c381d;border:0;border-radius:9px;color:#fff;font:inherit;font-weight:650;padding:10px 15px;cursor:pointer}p{font-size:.88rem;line-height:1.5;color:#605249}#status{min-height:1.5em;margin-bottom:0}@media(max-width:720px){.layout{grid-template-columns:1fr}}
+</style>
+<main>
+<h1>Tu firma de Gmail</h1>
+<div class="layout">
+<section class="panel" aria-labelledby="edit-title">
+<h2 id="edit-title">Editar firma</h2>
+<form class="fields" id="editor">
+<label>Nombre<input name="name" placeholder="Tu nombre" maxlength="100"></label>
+<label>Cargo<input name="role" placeholder="Diseñador visual" maxlength="120"></label>
+<label>Empresa<input name="company" maxlength="120"></label>
+<label>Ubicación<input name="location" maxlength="120"></label>
+<label>Teléfono<input name="phone" type="tel" maxlength="50"></label>
+<label>Correo<input name="email" type="email" maxlength="160"></label>
+<label>Sitio web<input name="website" placeholder="tusitio.com" maxlength="300"></label>
+<details open><summary>Avatar e íconos</summary>
+<div class="fields">
+<label class="check"><input name="showAvatar" type="checkbox" checked> Mostrar avatar</label>
+<label>URL pública del avatar<input name="image" type="url" placeholder="https://…" aria-describedby="image-help"></label>
+<label>Probar otra imagen<input name="file" type="file" accept="image/gif,image/png,image/jpeg"></label>
+<small id="image-help">Para copiar una imagen propia en la firma, usá su URL pública. El archivo local sirve para la vista previa.</small>
+<label>LinkedIn<input name="linkedin" placeholder="linkedin.com/in/tu-perfil" maxlength="300"></label>
+<label class="check"><input name="icons" type="checkbox" checked> Mostrar símbolos en los enlaces</label>
+</div>
+</details>
+</form>
+</section>
+<section class="panel" aria-labelledby="preview-title">
+<h2 id="preview-title">Vista previa</h2>
+<div class="preview" id="signature"></div>
+<button id="copy" type="button">Copiar firma</button>
+<p>Pegala en Gmail desde <strong>Configuración → Ver toda la configuración → General → Firma</strong> y guardá los cambios.</p>
+<p id="status" role="status"></p>
+</section>
+</div>
+</main>
+<script>
+const form = document.querySelector('#editor');
+const preview = document.querySelector('#signature');
+const status = document.querySelector('#status');
+const field = name => form.elements.namedItem(name);
+const read = name => field(name).value.trim();
+const publicImage = value => {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && !url.username && !url.password ? url.href : '';
+  } catch { return ''; }
+};
+const webLink = value => value ? publicImage(value.includes('://') ? value : 'https://' + value) : '';
+const avatar = new URL('avatar.gif', location.href);
+const settings = ['name','role','company','location','phone','email','website','image','linkedin','showAvatar','icons'];
+let objectUrl = '';
+let currentImage = '';
+let signatureText = '';
+const element = (tag, css, value) => {
+  const node = document.createElement(tag);
+  node.style.cssText = css;
+  if (value) node.textContent = value;
+  return node;
+};
+
+function render() {
+  const table = element('table','border-collapse:collapse;font:14px/1.32 Arial,sans-serif;color:#222222');
+  table.setAttribute('role','presentation');
+  table.setAttribute('cellpadding','0');
+  table.setAttribute('cellspacing','0');
+  const row = table.insertRow();
+  currentImage = field('showAvatar').checked ? objectUrl || (read('image') ? publicImage(read('image')) : avatar.href) : '';
+  if (currentImage) {
+    const cell = row.insertCell();
+    cell.style.cssText = 'padding:0 14px 0 0;vertical-align:middle';
+    const img = element('img','display:block;width:100px;height:auto;border:1px solid #d1beb0');
+    img.width = 100;
+    img.alt = 'Avatar';
+    img.src = currentImage;
+    cell.append(img);
+  }
+  const info = row.insertCell();
+  info.style.cssText = 'padding:0;vertical-align:middle';
+  const name = read('name') || 'Tu nombre';
+  const lines = ['role','company','location','phone'].map(read).filter(Boolean);
+  info.append(element('div','font-size:21px;font-weight:bold;margin:0 0 3px',name));
+  for (const line of lines) info.append(element('div','',line));
+  const links = element('div','margin-top:6px');
+  const labels = [];
+  const addLink = (href, label, icon) => {
+    if (!href) return;
+    if (labels.length) links.append(' · ');
+    const link = element('a','color:#205c9b;text-decoration:underline',field('icons').checked ? icon + ' ' + label : label);
+    link.href = href;
+    links.append(link);
+    labels.push(label);
+  };
+  addLink(webLink(read('website')),read('website'),'↗');
+  const email = read('email');
+  if (email && field('email').validity.valid) addLink('mailto:' + encodeURIComponent(email).replace('%40','@'),email,'✉');
+  addLink(webLink(read('linkedin')),'LinkedIn','↗');
+  if (labels.length) info.append(links);
+  signatureText = [name,...lines,...labels].join('\n');
+  // Keep the existing image in the page so typing does not restart the GIF.
+  const old = preview.querySelector('img');
+  const next = table.querySelector('img');
+  if (old && next && old.src === next.src) next.replaceWith(old);
+  preview.replaceChildren(table);
+}
+
+try {
+  const saved = JSON.parse(localStorage.getItem('gmail-signature') || '{}');
+  for (const key of settings) {
+    if (typeof saved[key] === 'boolean' && field(key).type === 'checkbox') field(key).checked = saved[key];
+    if (typeof saved[key] === 'string' && field(key).type !== 'checkbox') field(key).value = saved[key];
+  }
+} catch {}
+
+form.addEventListener('submit',event => event.preventDefault());
+form.addEventListener('input',event => {
+  if (event.target === field('file')) return;
+  if (event.target === field('image') && objectUrl) {
+    URL.revokeObjectURL(objectUrl);
+    objectUrl = '';
+    field('file').value = '';
+  }
+  try {
+    localStorage.setItem('gmail-signature',JSON.stringify(Object.fromEntries(settings.map(key => [
+      key, field(key).type === 'checkbox' ? field(key).checked : read(key)
+    ]))));
+  } catch {}
+  status.textContent = '';
+  render();
+});
+field('file').addEventListener('change',event => {
+  if (objectUrl) URL.revokeObjectURL(objectUrl);
+  const file = event.target.files[0];
+  objectUrl = file ? URL.createObjectURL(file) : '';
+  status.textContent = '';
+  render();
+});
+
+document.querySelector('#copy').addEventListener('click',async () => {
+  if (field('showAvatar').checked && (objectUrl || (read('image') && !currentImage))) {
+    status.textContent = 'Ingresá una URL pública HTTPS para la imagen o desactivá el avatar.';
+    return;
+  }
+  const copy = preview.firstElementChild.cloneNode(true);
+  const isLoopback = ['localhost','127.0.0.1','[::1]'].includes(avatar.hostname);
+  const localAvatar = currentImage === avatar.href && (avatar.protocol !== 'https:' || isLoopback);
+  if (localAvatar) copy.rows[0].deleteCell(0);
+  const html = copy.outerHTML;
+  try {
+    if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') throw new Error();
+    await navigator.clipboard.write([new ClipboardItem({
+      'text/html':new Blob([html],{type:'text/html'}),
+      'text/plain':new Blob([signatureText],{type:'text/plain'})
+    })]);
+  } catch {
+    const onCopy = event => {
+      event.clipboardData.setData('text/html',html);
+      event.clipboardData.setData('text/plain',signatureText);
+      event.preventDefault();
+    };
+    document.addEventListener('copy',onCopy);
+    let copied = false;
+    try { copied = document.execCommand('copy'); } catch {}
+    document.removeEventListener('copy',onCopy);
+    if (!copied) {
+      status.textContent = 'El navegador bloqueó la copia. Probá abrir el generador desde GitHub Pages.';
+      return;
+    }
+  }
+  status.textContent = localAvatar
+    ? 'Firma copiada sin avatar. Para incluirlo, publicá el generador o ingresá la URL pública del GIF.'
+    : 'Firma copiada. Ya podés pegarla en Gmail.';
+});
+render();
+</script>
+</html>
