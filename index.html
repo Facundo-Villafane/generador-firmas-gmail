@@ -53,7 +53,7 @@ const publicImage = value => {
   } catch { return ''; }
 };
 const webLink = value => value ? publicImage(value.includes('://') ? value : 'https://' + value) : '';
-const avatar = new URL('avatar.gif', location.href);
+const avatar = new URL('avatar-marco.gif', location.href);
 const settings = ['name','role','company','location','phone','email','website','image','linkedin','showAvatar','icons'];
 let objectUrl = '';
 let currentImage = '';
@@ -75,7 +75,7 @@ function render() {
   if (currentImage) {
     const cell = row.insertCell();
     cell.style.cssText = 'padding:0 14px 0 0;vertical-align:middle';
-    const img = element('img','display:block;width:100px;height:auto;border:1px solid #d1beb0');
+    const img = element('img','display:block;width:100px;height:auto');
     img.width = 100;
     img.alt = 'Avatar';
     img.src = currentImage;
