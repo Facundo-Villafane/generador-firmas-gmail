@@ -41,7 +41,7 @@
 <label>Probar otra imagen<input name="file" type="file" accept="image/gif,image/png,image/jpeg"></label>
 <small id="image-help">Para copiar una imagen propia en la firma, usá su URL pública. El archivo local sirve para la vista previa.</small>
 <label>LinkedIn<input name="linkedin" placeholder="linkedin.com/in/tu-perfil" maxlength="300"></label>
-<label class="check"><input name="icons" type="checkbox" checked> Mostrar símbolos en los enlaces</label>
+<label class="check"><input name="icons" type="checkbox" checked> Mostrar íconos en los enlaces</label>
 </div>
 </details>
 </form>
@@ -110,20 +110,30 @@ function render() {
   const addLink = (href, label, icon) => {
     if (!href) return;
     if (labels.length) links.append(' · ');
-    const link = element('a','color:#205c9b;text-decoration:underline',field('icons').checked ? icon + ' ' + label : label);
+    const link = element('a','color:#205c9b;text-decoration:underline');
     link.href = href;
+    if (field('icons').checked && icon.endsWith('.png')) {
+      const img = element('img','width:14px;height:14px;vertical-align:-2px;border:0');
+      img.src = new URL(icon, location.href).href;
+      img.width = img.height = 14;
+      img.alt = '';
+      link.append(img,'\u00a0');
+    } else if (field('icons').checked) {
+      link.append(icon + ' ');
+    }
+    link.append(label);
     links.append(link);
     labels.push(label);
   };
   addLink(webLink(read('website')),read('website'),'↗');
   const email = read('email');
-  if (email && field('email').validity.valid) addLink('mailto:' + encodeURIComponent(email).replace('%40','@'),email,'✉');
-  addLink(webLink(read('linkedin')),'LinkedIn','↗');
+  if (email && field('email').validity.valid) addLink('mailto:' + encodeURIComponent(email).replace('%40','@'),email,'icono-correo.png');
+  addLink(webLink(read('linkedin')),'LinkedIn','icono-linkedin.png');
   if (labels.length) info.append(links);
   signatureText = [name,...lines,...labels].join('\n');
   // Keep the existing image in the page so typing does not restart the GIF.
-  const old = preview.querySelector('img');
-  const next = table.querySelector('img');
+  const old = preview.querySelector('td > img');
+  const next = table.querySelector('td > img');
   if (old && next && old.src === next.src) next.replaceWith(old);
   preview.replaceChildren(table);
 }
@@ -214,6 +224,12 @@ document.querySelector('#copy').addEventListener('click',async () => {
   const isLoopback = ['localhost','127.0.0.1','[::1]'].includes(avatar.hostname);
   const localAvatar = currentImage === avatar.href && (avatar.protocol !== 'https:' || isLoopback);
   if (localAvatar) copy.rows[0].deleteCell(0);
+  if (location.protocol !== 'https:' || isLoopback) {
+    for (const icon of copy.querySelectorAll('a img')) {
+      icon.src = new URL(new URL(icon.src).pathname.split('/').pop(),
+        'https://facundo-villafane.github.io/generador-firmas-gmail/').href;
+    }
+  }
   const html = copy.outerHTML;
   try {
     if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') throw new Error();
